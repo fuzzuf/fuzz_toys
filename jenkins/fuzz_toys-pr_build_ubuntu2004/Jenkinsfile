@@ -1,0 +1,26 @@
+@Library('atla') _
+def dist_info = get_dist_info()[ get_dist_name( "${JOB_NAME}" ) ]
+pipeline {
+  agent{
+    docker { image dist_info[ 'images' ][ 'staticinst' ] }
+  }
+  options {
+    ansiColor('gnome-terminal')
+  }
+  stages {
+    stage('Build') {
+      steps {
+        atla_checkout( 'fuzz_toys', "${sha1}", true )
+        cmakeBuild buildDir: 'build', cmakeArgs: '-DENABLE_ADDRSAN=ON -DENABLE_LEAKSAN=ON -DENABLE_PCOMPSAN=ON -DENABLE_PSUBSAN=ON -DENABLE_UBSAN=ON', buildType: 'Release', installation: 'InSearchPath', steps: [[args: 'all']]
+      }
+    }
+  }
+  post { 
+    success {
+      atla_notify_build_result( 'fuzz_toys', 'Ubuntu 20.04でのビルド', true )
+    }
+    unsuccessful {
+      atla_notify_build_result( 'fuzz_toys', 'Ubuntu 20.04でのビルド', false )
+    }
+  }
+}

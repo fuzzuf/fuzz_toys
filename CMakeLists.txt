@@ -1,0 +1,164 @@
+cmake_minimum_required(VERSION 3.6)
+set(
+  CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH}
+  "${CMAKE_CURRENT_SOURCE_DIR}/cmake/"
+)
+
+PROJECT(fuzz_toys)
+
+execute_process(
+  COMMAND git rev-parse HEAD
+  OUTPUT_VARIABLE PATTR_COMMIT
+)
+set( PATTR_USER "unknown" CACHE STRING "The name of who generated the packagec" )
+set( PATTR_BRANCH "unknown" CACHE STRING "The name of branch the package used")
+set( PATTR_VERSION_MAJOR 0 )
+set( PATTR_VERSION_MINOR 1 )
+set( PATTR_VERSION_PATCH 0 )
+set( PATTR_VERSION_RELEASE 1 CACHE STRING "Release number of package" )
+math( EXPR PATTR_VERSION_RELEASE_CALCULATED "${PATTR_VERSION_RELEASE}" )
+set( PATTR_DESCRIPTION_SUMMARY "A Collection of Small Applications for Testing Fuzzers" )
+set( PATTR_HOMEPAGE_URL "https://github.com/fuzzuf/fuzz_toys" )
+set( PATTR_LICENSE "MIT" )
+set( PATTR_VENDOR "Ricerca Security" )
+set( PATTR_DIST "ricsec" )
+set( PATTR_MAINTAINER "Ricerca Security <fuzzuf-dev@ricsec.co.jp>" )
+set( PATTR_COMPRESSIN_TYPE "xz" )
+
+include(CheckIncludeFiles)
+include(CheckCXXSourceCompiles)
+include(GNUInstallDirs)
+find_package(PkgConfig)
+set(CMAKE_BUILD_TYPE Release)
+set(CMAKE_VERBOSE_MAKEFILE OFF)
+find_package( Boost 1.53.0 )
+
+set( ADDITIONAL_COMPILE_FLAGS )
+
+option( ENABLE_ADDRSAN "build with address sanitizer" OFF)
+if( ENABLE_ADDRSAN )
+  list(APPEND ADDITIONAL_COMPILE_FLAGS "-fsanitize=address" )
+  if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" )
+    list(APPEND ADDITIONAL_COMPILE_FLAGS "-static-libasan" )
+  endif()
+endif()
+option( ENABLE_PCOMPSAN "build with pointer compare sanitizer" OFF)
+if( ENABLE_PCOMPSAN )
+  list(APPEND ADDITIONAL_COMPILE_FLAGS "-fsanitize=pointer-compare" )
+endif()
+option( ENABLE_PSUBSAN "build with pointer subtract sanitizer" OFF)
+if( ENABLE_PSUBSAN )
+  list(APPEND ADDITIONAL_COMPILE_FLAGS "-fsanitize=pointer-subtract" )
+endif()
+option( ENABLE_THREADSAN "build with thread sanitizer" OFF)
+if( ENABLE_THREADSAN )
+  list(APPEND ADDITIONAL_COMPILE_FLAGS "-fsanitize=thread" )
+endif()
+option( ENABLE_LEAKSAN "build with leak sanitizer" OFF)
+if( ENABLE_LEAKSAN )
+  list(APPEND ADDITIONAL_COMPILE_FLAGS "-fsanitize=leak" )
+endif()
+option( ENABLE_UBSAN "build with undefined behavior sanitizer" OFF)
+if( ENABLE_UBSAN )
+  list(APPEND ADDITIONAL_COMPILE_FLAGS "-fsanitize=undefined" )
+endif()
+option( ENABLE_CXX20 "build with -std=c++20" OFF)
+if( ENABLE_CXX20 )
+  set( CMAKE_CXX_STANDARD "20" )
+else()
+  set( CMAKE_CXX_STANDARD "17" )
+endif()
+set( MARCH "native" CACHE STRING "-march target" )
+list(APPEND ADDITIONAL_COMPILE_FLAGS "-march=${MARCH}" )
+option( ENABLE_STRICT_BRAINF_CK "enable additional brainf*ck checks" OFF)
+list(APPEND ADDITIONAL_COMPILE_FLAGS "-flto" )
+list(APPEND ADDITIONAL_COMPILE_FLAGS "-fpic" )
+
+string(REPLACE ";" " " ADDITIONAL_COMPILE_FLAGS_STR "${ADDITIONAL_COMPILE_FLAGS}")
+string(REPLACE ";" " " ADDITIONAL_LINK_FLAGS_STR "${ADDITIONAL_LINK_FLAGS}")
+
+set(CMAKE_CXX_FLAGS_DEBUG "-g -Wall -Wextra -Werror ${ADDITIONAL_COMPILE_FLAGS_STR}")
+set(CMAKE_C_FLAGS_DEBUG "-g -Wall -Wextra -Werror ${ADDITIONAL_COMPILE_FLAGS_STR}")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -Wextra -Werror ${ADDITIONAL_COMPILE_FLAGS_STR}")
+set(CMAKE_C_FLAGS_RELEASE "-O3 -Wall -Wextra -Werror ${ADDITIONAL_COMPILE_FLAGS_STR}")
+
+find_program(LSB_RELEASE_EXEC lsb_release)
+if( NOT LSB_RELEASE_EXEC STREQUAL "LSB_RELEASE_EXEC-NOTFOUND" )
+  execute_process(COMMAND ${LSB_RELEASE_EXEC} -is
+    OUTPUT_VARIABLE LSB_RELEASE_ID_SHORT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+else()
+  set( LSB_RELEASE_ID_SHORT "unknown" )
+endif()
+
+configure_file(
+  "${CMAKE_SOURCE_DIR}/check/config.h.in"
+  "${CMAKE_BINARY_DIR}/config.h"
+)
+
+if( ${LSB_RELEASE_ID_SHORT} STREQUAL "Debian" )
+  set( CPACK_GENERATOR "DEB" )
+elseif( ${LSB_RELEASE_ID_SHORT} STREQUAL "Ubuntu" )
+  set( CPACK_GENERATOR "DEB" )
+elseif( ${LSB_RELEASE_ID_SHORT} STREQUAL "RedHatEnterpriseServer" )
+  set( CPACK_GENERATOR "RPM" )
+elseif( ${LSB_RELEASE_ID_SHORT} STREQUAL "Fedora" )
+  set( CPACK_GENERATOR "RPM" )
+elseif( ${LSB_RELEASE_ID_SHORT} STREQUAL "CentOS" )
+  set( CPACK_GENERATOR "RPM" )
+elseif( ${LSB_RELEASE_ID_SHORT} STREQUAL "AmazonAMI" )
+  set( CPACK_GENERATOR "RPM" )
+elseif( ${LSB_RELEASE_ID_SHORT} STREQUAL "openSUSE project" )
+  set( CPACK_GENERATOR "RPM" )
+elseif( ${LSB_RELEASE_ID_SHORT} STREQUAL "SUSE LINUX" )
+  set( CPACK_GENERATOR "RPM" )
+elseif( ${LSB_RELEASE_ID_SHORT} STREQUAL "Scientific" )
+  set( CPACK_GENERATOR "RPM" )
+else()
+  set( CPACK_GENERATOR "TGZ" )
+endif()
+
+set( DEB_REQUIREMENTS )
+set( RPM_REQUIREMENTS )
+
+set( CPACK_PACKAGE_NAME "fuzztoys" )
+set( CPACK_PACKAGE_VENDOR "${PATTR_VENDOR}" )
+set( CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE" )
+set( CPACK_PACKAGE_VERSION_MAJOR "${PATTR_VERSION_MAJOR}" )
+set( CPACK_PACKAGE_VERSION_MINOR "${PATTR_VERSION_MINOR}" )
+set( CPACK_PACKAGE_VERSION_PATCH "${PATTR_VERSION_PATCH}" )
+set( CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PATTR_DESCRIPTION_SUMMARY}" )
+set( CPACK_PACKAGE_DESCRIPTION "Generated by: ${PATTR_USER}\nBranch: ${PATTR_BRANCH}\nCommit: ${PATTR_COMMIT}" )
+set( CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_SOURCE_DIR}/README.md" )
+set( CPACK_PACKAGE_HOMEPAGE_URL "${PATTR_HOMEPAGE_URL}" )
+set( CPACK_STRIP_FILES FALSE )
+
+set( CPACK_DEBIAN_PACKAGE_RELEASE "${PATTR_VERSION_RELEASE_CALCULATED}" )
+set( CPACK_DEBIAN_FILE_NAME DEB-DEFAULT )
+set( CPACK_DEBIAN_PACKAGE_MAINTAINER "${PATTR_MAINTAINER}" )
+set( CPACK_DEBIAN_COMPRESSION_TYPE "${PATTR_COMPRESSION_TYPE}" )
+set( CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON )
+string(REPLACE ";" "," DEB_REQUIREMENTS_STR "${DEB_REQUIREMENTS}")
+set( CPACK_DEBIAN_PACKAGE_DEPENDS "${DEB_REQUIREMENTS_STR}" )
+message("deb requirements: ${DEB_REQUIREMENTS_STR}")
+
+set( CPACK_RPM_PACKAGE_RELEASE "${PATTR_VERSION_RELEASE_CALCULATED}" )
+set( CPACK_RPM_PACKAGE_RELEASE_DIST "${PATTR_DIST}" )
+set( CPACK_RPM_PACKAGE_LICENSE "${PATTR_LICENSE}" )
+set( CPACK_RPM_PACKAGE_URL "${PATTR_HOMEPAGE_URL}" )
+set( CPACK_RPM_COMPRESSION_TYPE "${PATTR_COMPRESSION_TYPE}" )
+string(REPLACE ";" "," RPM_REQUIREMENTS_STR "${RPM_REQUIREMENTS}")
+set( CPACK_DEBIAN_PACKAGE_DEPENDS "${RPM_REQUIREMENTS_STR}" )
+message("rpm requirements: ${RPM_REQUIREMENTS_STR}")
+
+set(CPACK_SET_DESTDIR true)
+
+include(CPack)
+
+include_directories(
+	${Boost_INCLUDE_DIR}
+)
+
+subdirs( src )
+

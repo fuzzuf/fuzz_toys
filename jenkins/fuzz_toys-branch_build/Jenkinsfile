@@ -1,0 +1,20 @@
+@Library('atla') _
+atla_branch_build2( 'fuzz_toys', 'staticinst', "${BRANCH}" ) {
+  dist_name, dist_info ->
+  node( 'atla_build' ) {
+    docker.image( dist_info[ 'images' ][ 'staticinst' ] ).inside {
+      stage( 'checkout' ) {
+        atla_checkout( 'fuzz_toys', "${BRANCH}" )
+      }
+      withEnv(['CC=wyvern-clang', 'CXX=wyvern-clang++']) {
+        stage( 'build' ) {
+          cmakeBuild buildDir: 'build_'+dist_info[ "type" ]+'_'+dist_info[ "version" ], buildType: 'Release', cleanBuild: true, cmakeArgs: "-DCMAKE_INSTALL_PREFIX=/usr -DPATTR_USER=jenkins -DPATTR_BRANCH=${BRANCH} -DPATTR_VERSION_RELEASE=${REVISION_OFFSET}+${BUILD_NUMBER} -DMARCH=skylake", installation: 'InSearchPath', steps: [[args: 'all -j8'], [args: 'package']]
+        }
+      }
+      stage( 'deploy' ) {
+        atla_publish( dist_info, "${BRANCH}" )
+      }
+    }
+  }
+}
+
